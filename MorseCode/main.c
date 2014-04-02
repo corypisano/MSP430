@@ -1,12 +1,22 @@
 /*
- Project 1
- Due April 7
+Cory Pisano
+April 7, 2014
+ECE:435   - Embedded Systems Programming
+Project 1 - Morse Code
 
- 1. fire interrupt on button press (active low)
- 2. count how long button was pressed, record in array
- 3. record up to 5 presses
- 4. low power mode
-
+ ----------------------
+ * #        Morse Code
+ * 0 		– – – – –
+ * 1    	· – – – –
+ * 2  		· · – – –
+ * 3 		· · · – –
+ * 4      	· · · · –
+ * 5      	· · · · ·
+ * 6      	– · · · ·
+ * 7      	– – · · ·
+ * 8      	– – – · ·
+ * 9      	– – – – ·
+----------------------
  */
 
 #include <msp430.h>
@@ -14,22 +24,65 @@
 #define INPUT BIT3
 #define LEDR BIT0
 #define LEDG BIT6
+#define MESSAGE_LENGTH 5
 
 /* globals */
-int count = 0;
-int pressTimes[5];
-int isButtonPressed = 0;
+unsigned short count = 0;
+unsigned short isButtonPressed = 0;
+unsigned int pressTimes[MESSAGE_LENGTH];
 
-void flashLEDG(int n) {
+unsigned short convertToMessage() {
 
+	/* get max time */
+	unsigned int maxTime = pressTimes[0];
+	unsigned int i;
+	for (i = 1; i < MESSAGE_LENGTH; i++) {
+		if (pressTimes[i] > maxTime) {
+			maxTime = pressTimes[i];
+		}
+	}
+
+	unsigned int threshold = maxTime / 2;
+
+	/* pressTimes -> message */
+	for (i = 0; i < MESSAGE_LENGTH; i++) {
+		if (pressTimes[i] > threshold) {
+			pressTimes[i] = 1;
+		}
+		else {
+			pressTimes[i] = 0;
+		}
+	}
+
+	/* Morse Code to # */ 						// # 	Morse Code
+	if (pressTimes[0] == 0) {
+		if (pressTimes[1] == 1) {				// 1 	.----
+			return 1;
+		} else if (pressTimes[2] == 1) { 		// 2 	..---
+			return 2;
+		} else if (pressTimes[3] == 1) {		// 3 	...--
+			return 3;
+		} else if (pressTimes[4] == 1) {		// 4 	....-
+			return 4;
+		} else {								// 5 	.....
+			return 5;
+		}
+	} else {
+		if (pressTimes[1] == 0) { 				// 6 	-....
+			return 6;
+		} else if (pressTimes[2] == 0) {		// 7 	--...
+			return 7;
+		} else if (pressTimes[3] == 0) {		// 8 	---..
+			return 8;
+		} else {								// 9 	----.
+			return 9;
+		}
+	}
+}
+
+void flashLEDG(unsigned short n) {
 	/*ignore button presses while flashing */
 	P1IE &= ~INPUT;
-
-	/* error */
-	if (n < 0) {
-		P1OUT |= LEDR;
-		return;
-	}
 
 	/* flash led n times, switch to interrupt */
 	int i;
@@ -43,7 +96,7 @@ void flashLEDG(int n) {
 	P1IE |= INPUT;
 }
 
-void flashLEDR(int n) {
+void flashLEDR(unsigned short n) {
 
 	/*ignore button pressed while flashing */
 	P1IE &= ~INPUT;
@@ -63,23 +116,31 @@ void flashLEDR(int n) {
 /* Push Button Interrupts */
 #pragma vector = PORT1_VECTOR
 __interrupt void Port_1(void) {
+
 	P1IE &= ~INPUT;  	// dont allow additional interrupts
 	P1IES ^= INPUT;		// falling/rising edge switch
 	isButtonPressed = !isButtonPressed;
+
+	/* DEBOUNCE - ignore button presses that are too quick */
+	if (TA0R < 128) {
+		P1IE |= INPUT;  	// turn button interrupts back on
+		P1IFG &= ~(INPUT);	// clear push button interrupt
+		return;
+	}
+
+	/* ON BUTTON PRESS */
 	if (isButtonPressed) {
 		TA0CTL |= TACLR; // reset TAR,
 		P1OUT |= LEDR;
-
 	}
+	/* ON BUTTON RELEASE */
 	else {
-		int time_end = TAR;
-		pressTimes[count++] = time_end;
+		pressTimes[count++] = TA0R;
 		TA0CTL |= TACLR; // reset TAR,
 		P1OUT &= ~LEDR;
 	}
 
-	P1OUT ^= LEDG;
-	P1IE |= INPUT;  	// dont allow additional interrupts
+	P1IE |= INPUT;
 	P1IFG &= ~(INPUT);	// clear push button interrupt
 }
 
@@ -87,47 +148,24 @@ __interrupt void Port_1(void) {
  * check if message is valid -> display green flashes
  * 	     else ERROR -> display red flashes */
 #pragma vector=TIMER0_A0_VECTOR
-   __interrupt void TimerA0 (void) {		// Timer0 A0 interrupt service routine
-	   /* if count != 5  {
-	    * 	ERROR
-	    * }
-	    * else
-	    * 	displaymessage();
-	    */
-	   /* no button pressed have occured yet */
-	   if (count == 0) {
-		  TA0CTL |= TACLR; // reset TAR
-	   }
-	   else if (count == 5) {
-		  flashLEDG(2);
-		  count = 0;
-	   }
-	   else {
-		   flashLEDR(2);
-	   }
+__interrupt void TimerA0 (void) {		// Timer0 A0 interrupt service routine
+
+	/* no button pressed have occured yet */
+	if (count == 0) {
+		TA0CTL |= TACLR; // reset TAR
+	}
+	/* display message */
+	else if (count == MESSAGE_LENGTH) {
+		unsigned short message = convertToMessage();
+		count = 0;
+		flashLEDG(message);
+		count = 0;
+	}
+	/* error */
+	else {
+		flashLEDR(2);
+	}
 }
-
-/* use timer A1 to debounce button, disable P1IE on press,
- * wait for x milliseconds to re-enable */
-#pragma vector=TIMER0_A1_VECTOR
-   __interrupt void TimerA1 (void) {
-
-}
-
-
-/*
- * #        Morse Code
- * 0 		– – – – –
- * 1    	· – – – –
- * 2  		· · – – –
- * 3 		· · · – –
- * 4      	· · · · –
- * 5      	· · · · ·
- * 6      	– · · · ·
- * 7      	– – · · ·
- * 8      	– – – · ·
- * 9      	– – – – ·
- */
 
 void main(void) {
 
