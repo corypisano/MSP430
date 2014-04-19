@@ -21,9 +21,9 @@ Switching between modes - interrupt driven? or in while(1) { }
 #define BIN_WIDTH 	255
 #define FREQ_SCALAR	CLOCK_F/(4*BIN_WIDTH)
 
-//volatile unsigned int volume 	= 8;  // inverse volume (2 is max, 255 is min)
-volatile unsigned int toneCount = 36; //
-volatile unsigned int count 	= 0;	  //
+//volatile unsigned int volume 	= 8;  	// inverse volume (2 is max, 255 is min)
+volatile unsigned int toneCount = 36; 	//
+volatile unsigned int count 	= 0;	//
 
 /* Timer A0 timeout interrupt
  * occurs when TAR == BIN_WIDTH
@@ -54,8 +54,13 @@ __interrupt void TimerA0 (void) {
  * input  - frequency in Hertz
  * sets global variable toneCount
  */
-void playTone(unsigned int f){
+void playTone(unsigned int f, unsigned int duration){
 	toneCount = FREQ_SCALAR/f;
+
+	unsigned int i;
+	for (i = 0; i < duration; i++) {
+		__delay_cycles(1000);
+	}
 }
 
 void main(void) {
@@ -81,14 +86,32 @@ void main(void) {
 	__enable_interrupt();
 
 	while (1) {
-		playTone(220);
-		__delay_cycles(8000000);
 
-		playTone(440);
-		__delay_cycles(8000000);
+		/* Play Inspector Gadget Theme song! */
+		// measure 1:	{ c4, d4, eb4, f4 } g4, eb4
+		playTone(262,4000); //c4
+		playTone(294,2500); //d4
+		playTone(311,4000); //eb4
+		playTone(349,2500); //f4
+		playTone(392,4000); //g4
+		playTone(311,2500); //eb4
 
-		playTone(680);
-		__delay_cycles(8000000);
+		// measure 2:	f4#, d4, f4, eb4
+		playTone(370,6500); //f4#
+		playTone(294,6500); //d4
+		playTone(349,6500); //f4
+		playTone(311,6500); //eb4
+
+		// measure 3:	{ c4, d4, eb4, f4 } g4, eb4
+		playTone(262,4000); //c4
+		playTone(294,2500); //d4
+		playTone(311,4000); //eb4
+		playTone(349,2500); //f4
+		playTone(392,6500); //g4
+		playTone(523,6500); //c5
+
+		// measure 4:
+		playTone(494,26000); //b4
 
 	}
 }
